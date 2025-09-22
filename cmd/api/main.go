@@ -1,17 +1,10 @@
 package main
 
-import (
-	"go.uber.org/fx"
-	"time"
-)
+import "myapp/internal/fx"
 
 func main() {
 
-	fx.New(
-		fx.StartTimeout(time.Minute*2),
-		fx.StopTimeout(time.Minute*2),
-		fx.Provide(),
-	).Run()
+	fx.New().Run()
 	/*tp := service.RealTime{}
 	svc := service.NewGreeterService(tp)
 	h := controller.NewHandler(svc)

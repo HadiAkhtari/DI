@@ -2,19 +2,16 @@ package controller
 
 import (
 	"encoding/json"
-	"go.uber.org/zap"
 	"myapp/internal/service"
 	"net/http"
 )
 
 type Handler struct {
 	svc *service.GreeterService
-	log *zap.Logger
 }
 
-func NewHandler(svc *service.GreeterService, log *zap.Logger) *Handler {
-	return &Handler{svc: svc,
-		log: log}
+func NewHandler(svc *service.GreeterService) *Handler {
+	return &Handler{svc: svc}
 }
 func (h *Handler) Greet(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
