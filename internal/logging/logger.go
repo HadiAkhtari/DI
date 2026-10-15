@@ -1,12 +1,6 @@
 package logging
 
-import (
-	"fmt"
-)
-
-/*func NewLogger() (*zap.Logger, error) {
-	return zap.NewProduction()
-}*/
+import "fmt"
 
 func LogInfo(msg string) {
 	fmt.Println("Log : ", msg)

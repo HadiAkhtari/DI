@@ -2,123 +2,50 @@ package controller
 
 import (
 	"context"
-	"go.uber.org/fx"
-	"myapp/internal/config"
-	"myapp/internal/logging"
-	"net/http"
-	"time"
-)
-
-func RunServer(lifecycle fx.Lifecycle, mux *http.ServeMux, cfg *config.Config) {
-	srv := &http.Server{
-		Addr:    cfg.Addr,
-		Handler: mux,
-	}
-	lifecycle.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			logging.LogInfo("Starting server")
-			go func() {
-				if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-					logging.LogError("http server failed: " + err.Error())
-				}
-			}()
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			_, hasDeadline := ctx.Deadline()
-			if !hasDeadline {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
-				defer cancel()
-			}
-			return srv.Shutdown(ctx)
-		},
-	})
-}
-
-/*
-import (
-	"context"
-	"myapp/internal/logging"
+	"errors"
+	"net"
 	"net/http"
 	"time"
 
 	"go.uber.org/fx"
 	"myapp/internal/config"
+	"myapp/internal/logging"
 )
 
-
-
-
-// RunServer سرور HTTP را با Uber Fx در شروع برنامه روشن و در توقف، به‌صورت graceful خاموش می‌کند.
-func RunServer(lifecycle fx.Lifecycle, mux *http.ServeMux, cfg config.Config) {
+func RunServer(lifecycle fx.Lifecycle, mux *http.ServeMux, cfg *config.Config, shutdown fx.Shutdowner) {
 	srv := &http.Server{
-		Addr:    cfg.Addr,
-		Handler: mux,
-		// توصیه برای پایداری و امنیت:
+		Addr:              cfg.Addr,
+		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			logging.LogInfo("starting HTTP server")
-
-			go func() {
-				if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-
-					logging.LogError("http server failed: " + err.Error())
-
-				}
-			}()
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			// اگر ctx مهلت ندارد، یک مهلت پیش‌فرض بدهیم:
-			if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
-				defer cancel()
+			listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.Addr)
+			if err != nil {
+				return err
 			}
-			logging.LogInfo("stopping HTTP server")
-			// Shutdown به‌صورت graceful: درخواست‌های درحال اجرا را تمام می‌کند.
-			return srv.Shutdown(ctx)
-		},
-	})
-}*/
-
-/*package controller
-
-import (
-	"context"
-	"go.uber.org/fx"
-	"go.uber.org/zap"
-	"myapp/internal/config"
-	"net/http"
-)
-
-func RunServer(lifecycle fx.Lifecycle, mux *http.ServeMux, cfg config.Config, log *zap.Logger) {
-	srv := &http.Server{
-		Addr:    cfg.Addr,
-		Handler: mux,
-	}
-	lifecycle.Append(fx.Hook{
-		OnStart: func(context.Context) error {
-			log.Info("starting HTTP server", zap.String("addr", cfg.Addr))
+			logging.LogInfo("Starting server at " + listener.Addr().String())
 			go func() {
-				if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-					log.Fatal("http server startup failed", zap.Error(err))
+				if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+					logging.LogError("http server failed: " + err.Error())
+					if err := shutdown.Shutdown(fx.ExitCode(1)); err != nil {
+						logging.LogError("shutdown failed: " + err.Error())
+					}
 				}
 			}()
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			return srv.Shutdown(ctx)
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			if err := srv.Shutdown(ctx); err != nil {
+				_ = srv.Close()
+				return err
+			}
+			return nil
 		},
 	})
 }
-
-
-*/
